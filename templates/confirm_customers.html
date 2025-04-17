@@ -1,1 +1,88 @@
- 
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Confirm Customer Names</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <p><strong>Instructions:</strong></p>
+                    <ol>
+                        <li>Review each customer name found in the uploaded file</li>
+                        <li>Edit the customer names if needed to match your QuickBooks Online customer names</li>
+                        <li>Check the box next to each customer you want to include</li>
+                        <li>Click "Confirm & Continue" to proceed</li>
+                    </ol>
+                </div>
+                
+                <form action="{{ url_for('confirm_customers') }}" method="post" class="mt-4">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Include</th>
+                                    <th>Original Customer Name</th>
+                                    <th>QuickBooks Customer Name</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for i, customer in enumerate(customers) %}
+                                <tr>
+                                    <td>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="confirm_{{ i }}" id="confirm_{{ i }}" checked>
+                                        </div>
+                                    </td>
+                                    <td>{{ customer }}</td>
+                                    <td>
+                                        <input type="text" class="form-control" name="customer_{{ i }}" id="customer_{{ i }}" value="{{ customer }}">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">Back</a>
+                        <button type="submit" class="btn btn-primary">Confirm & Continue</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Process Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div class="text-center">
+                        <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">✓</div>
+                        <div>Upload File</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">2</div>
+                        <div>Confirm Customers</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">3</div>
+                        <div>Enter Invoice Details</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">4</div>
+                        <div>Review & Edit</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">5</div>
+                        <div>Download CSV</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

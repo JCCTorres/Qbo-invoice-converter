@@ -1,1 +1,139 @@
- 
+{% extends "layout.html" %}
+
+{% block head %}
+<style>
+    .tabulator-cell input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    #data-table {
+        height: 600px; /* Set a fixed height for the table */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Review & Edit Data</h4>
+        <div>
+            <button id="save-button" class="btn btn-light">Save Changes</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info mb-4">
+            <p><strong>Instructions:</strong></p>
+            <ol>
+                <li>Review the data that will be imported into QuickBooks Online</li>
+                <li>Click on any cell to edit its value</li>
+                <li>Click "Save Changes" to proceed to download the CSV file</li>
+            </ol>
+        </div>
+        
+        <div id="data-table"></div>
+        
+        <form id="edit-form" action="{{ url_for('review') }}" method="post" class="d-none">
+            <input type="hidden" name="edited_data" id="edited-data">
+        </form>
+        
+        <div class="d-flex justify-content-between mt-4">
+            <a href="{{ url_for('invoice_details') }}" class="btn btn-secondary">Back</a>
+            <button type="button" id="download-button" class="btn btn-success">Generate CSV</button>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Process Overview</h5>
+    </div>
+    <div class="card-body">
+        <div class="d-flex justify-content-between">
+            <div class="text-center">
+                <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">✓</div>
+                <div>Upload File</div>
+            </div>
+            <div class="text-center">
+                <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">✓</div>
+                <div>Confirm Customers</div>
+            </div>
+            <div class="text-center">
+                <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">✓</div>
+                <div>Enter Invoice Details</div>
+            </div>
+            <div class="text-center">
+                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">4</div>
+                <div>Review & Edit</div>
+            </div>
+            <div class="text-center">
+                <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">5</div>
+                <div>Download CSV</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let table;
+    let tableData = {{ data|tojson }};
+    let columns = {{ columns|tojson }};
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Create Tabulator table
+        table = new Tabulator("#data-table", {
+            data: tableData,
+            layout: "fitColumns",
+            pagination: "local",
+            paginationSize: 15,
+            columns: buildColumns(columns),
+            selectable: false,
+            height: "500px",
+        });
+        
+        // Save button click event
+        document.getElementById("save-button").addEventListener("click", function() {
+            const data = table.getData();
+            alert("Changes saved to the current session. Click 'Generate CSV' to download the file.");
+        });
+        
+        // Download button click event
+        document.getElementById("download-button").addEventListener("click", function() {
+            const data = table.getData();
+            document.getElementById("edited-data").value = JSON.stringify(data);
+            document.getElementById("edit-form").submit();
+        });
+    });
+    
+    // Build column definitions
+    function buildColumns(columnNames) {
+        return columnNames.map(function(column) {
+            let columnDef = {
+                title: column,
+                field: column,
+                editor: "input",
+                headerFilter: "input", // Add header filter
+                headerFilterLiveFilter: true
+            };
+            
+            // Special formatting for required columns
+            if (column.includes('*')) {
+                columnDef.title = '<span class="text-danger">' + column + '</span>';
+                columnDef.headerTooltip = "Required field";
+            }
+            
+            // Custom formatting for amount column
+            if (column === '*ItemAmount') {
+                columnDef.formatter = "money";
+                columnDef.formatterParams = {
+                    precision: 2
+                };
+            }
+            
+            return columnDef;
+        });
+    }
+</script>
+{% endblock %} 

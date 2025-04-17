@@ -1,1 +1,63 @@
- 
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Upload Laundry Service Report</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <p><strong>Instructions:</strong></p>
+                    <ol>
+                        <li>Export your report from your laundry service system as an Excel file (.xlsx)</li>
+                        <li>The file should follow the naming pattern "Laundry Service - Financial Report - [date]"</li>
+                        <li>Ensure the file contains the required columns (Id, Name, Cleaning Date, House, Code, Status, Price)</li>
+                        <li>Upload the file using the form below</li>
+                    </ol>
+                </div>
+                
+                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="mt-4">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select Excel File</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required>
+                        <div class="form-text">Only Excel files (.xlsx, .xls) are supported</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload File</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Process Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div class="text-center">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">1</div>
+                        <div>Upload File</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">2</div>
+                        <div>Confirm Customers</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">3</div>
+                        <div>Enter Invoice Details</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">4</div>
+                        <div>Review & Edit</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">5</div>
+                        <div>Download CSV</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

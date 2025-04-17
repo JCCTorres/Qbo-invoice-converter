@@ -1,1 +1,88 @@
- 
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Enter Invoice Details</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <p><strong>Instructions:</strong></p>
+                    <ol>
+                        <li>Enter the starting invoice number. This should be the next available invoice number in your QuickBooks Online account.</li>
+                        <li>Enter the invoice date. This will be used for all invoices created.</li>
+                        <li>The due date will automatically be set to 4 days after the invoice date.</li>
+                    </ol>
+                </div>
+                
+                <form action="{{ url_for('invoice_details') }}" method="post" class="mt-4">
+                    <div class="mb-3">
+                        <label for="start_invoice_number" class="form-label">Starting Invoice Number</label>
+                        <input type="number" class="form-control" id="start_invoice_number" name="start_invoice_number" required min="1">
+                        <div class="form-text">Enter the next available invoice number from your QuickBooks Online account.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="invoice_date" class="form-label">Invoice Date</label>
+                        <input type="date" class="form-control" id="invoice_date" name="invoice_date" required 
+                               value="{{ now.strftime('%Y-%m-%d') }}">
+                        <div class="form-text">This date will be used for all invoices. Due dates will be set to 4 days later.</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('confirm_customers') }}" class="btn btn-secondary">Back</a>
+                        <button type="submit" class="btn btn-primary">Continue to Review</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Process Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div class="text-center">
+                        <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">✓</div>
+                        <div>Upload File</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">✓</div>
+                        <div>Confirm Customers</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">3</div>
+                        <div>Enter Invoice Details</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">4</div>
+                        <div>Review & Edit</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 50px; height: 50px;">5</div>
+                        <div>Download CSV</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Set today's date as the default date
+    document.addEventListener('DOMContentLoaded', function() {
+        var today = new Date();
+        var dd = String(today.getDate()).padStart(2, '0');
+        var mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
+        var yyyy = today.getFullYear();
+        
+        today = yyyy + '-' + mm + '-' + dd;
+        document.getElementById('invoice_date').value = today;
+    });
+</script>
+{% endblock %} 
