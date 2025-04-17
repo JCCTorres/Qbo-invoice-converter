@@ -29,16 +29,16 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for i, customer in enumerate(customers) %}
+                                {% for customer in customers %}
                                 <tr>
                                     <td>
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="confirm_{{ i }}" id="confirm_{{ i }}" checked>
+                                            <input class="form-check-input" type="checkbox" name="confirm_{{ loop.index0 }}" id="confirm_{{ loop.index0 }}" checked>
                                         </div>
                                     </td>
                                     <td>{{ customer }}</td>
                                     <td>
-                                        <input type="text" class="form-control" name="customer_{{ i }}" id="customer_{{ i }}" value="{{ customer }}">
+                                        <input type="text" class="form-control" name="customer_{{ loop.index0 }}" id="customer_{{ loop.index0 }}" value="{{ customer }}">
                                     </td>
                                 </tr>
                                 {% endfor %}

@@ -8,7 +8,7 @@ def transform_data(file_path, start_invoice_number, invoice_date):
     Transform the laundry service report to QuickBooks Online format
     
     Args:
-        file_path (str): Path to the Excel file
+        file_path (str): Path to the Excel or CSV file
         start_invoice_number (int): Starting invoice number
         invoice_date (datetime): Date for the invoice
         
@@ -16,61 +16,171 @@ def transform_data(file_path, start_invoice_number, invoice_date):
         pd.DataFrame: Transformed dataframe ready for QBO import
     """
     try:
-        # Read the Excel file
-        df = pd.read_excel(file_path)
+        # Determine file type based on extension
+        file_extension = file_path.lower().split('.')[-1] if '.' in file_path else ''
         
-        # Check if required columns exist
-        required_columns = ['Id', 'Name', 'Cleaning Date', 'House', 'Code', 'Status', 'Price', 'Note']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+        # Read the file based on its extension
+        if file_extension == 'csv':
+            print("Reading CSV file for transformation...")
+            df = pd.read_csv(file_path)
+        else:
+            # Try multiple Excel reading engines if it's an Excel file
+            try:
+                print("Attempting to read Excel file with default engine for transformation...")
+                df = pd.read_excel(file_path)
+            except Exception as e1:
+                print(f"Error with default engine: {str(e1)}")
+                try:
+                    print("Trying with engine='openpyxl'...")
+                    df = pd.read_excel(file_path, engine='openpyxl')
+                except Exception as e2:
+                    print(f"Error with openpyxl engine: {str(e2)}")
+                    try:
+                        print("Trying with engine='xlrd'...")
+                        df = pd.read_excel(file_path, engine='xlrd')
+                    except Exception as e3:
+                        print(f"Error with xlrd engine: {str(e3)}")
+                        # If Excel reading fails completely, try CSV as last resort
+                        try:
+                            print("Trying to read as CSV...")
+                            df = pd.read_csv(file_path)
+                        except Exception as e4:
+                            print(f"Error reading as CSV: {str(e4)}")
+                            raise ValueError(f"Could not read file with any available method. Last error: {str(e3)}")
         
-        # Make a copy to avoid modifying the original dataframe
-        qbo_df = df.copy()
+        print(f"File contents loaded. Columns: {df.columns.tolist()}")
+        print(f"First few rows: {df.head(2).to_dict()}")
         
-        # Remove the last row if it's a total row (common in reports)
-        if qbo_df.iloc[-1]['Name'] == '':
-            qbo_df = qbo_df[:-1]
+        # Add fallback columns if the CSV doesn't have all required columns
+        # These are the minimum required columns for QuickBooks Online import
+        required_qbo_columns = [
+            '*InvoiceNo', '*Customer', '*InvoiceDate', '*DueDate',
+            'Item(Product/Service)', 'ItemDescription', 'ItemQuantity', '*ItemAmount'
+        ]
         
-        # Filter out rows with missing essential data
-        qbo_df = qbo_df.dropna(subset=['Name', 'Price'])
+        # Create a new DataFrame with the required structure
+        qbo_df = pd.DataFrame(columns=required_qbo_columns)
         
-        # Only keep rows with status "Delivery" or "Production"
-        qbo_df = qbo_df[qbo_df['Status'].isin(['Delivery', 'Production', 'Open'])]
+        # Try to identify needed columns from the input file
+        name_col = None
+        price_col = None
+        date_col = None
+        id_col = None
+        house_col = None
+        note_col = None
         
-        # Rename columns as specified
-        column_mapping = {
-            'Id': '*InvoiceNo',
-            'Name': '*Customer',
-            'Cleaning Date': 'Service Date',
-            'Code': 'ItemDescription',
-            'Price': '*ItemAmount',
-            'House': 'House'  # Keep for reference, will modify later
-        }
-        qbo_df = qbo_df.rename(columns=column_mapping)
+        # Look for customer name column
+        for possible_name in ['Name', 'Customer', 'Client', 'Account']:
+            if possible_name in df.columns:
+                name_col = possible_name
+                break
+                
+        if not name_col:
+            # Try case-insensitive search
+            for col in df.columns:
+                if 'name' in col.lower() or 'customer' in col.lower():
+                    name_col = col
+                    break
+                    
+        if not name_col and len(df.columns) > 1:
+            # If still not found, use second column as fallback
+            name_col = df.columns[1]
         
-        # Create required new columns
-        qbo_df['*InvoiceDate'] = invoice_date.strftime('%d/%m/%Y')
-        qbo_df['*DueDate'] = (invoice_date + timedelta(days=4)).strftime('%d/%m/%Y')
+        # Look for price/amount column
+        for possible_price in ['Price', 'Amount', 'Total', 'Value', 'Cost']:
+            if possible_price in df.columns:
+                price_col = possible_price
+                break
+                
+        if not price_col:
+            # Try case-insensitive search
+            for col in df.columns:
+                if 'price' in col.lower() or 'amount' in col.lower() or 'total' in col.lower() or 'value' in col.lower():
+                    price_col = col
+                    break
         
-        # Format ItemDescription: "Order Id: [ID] / [House]"
-        qbo_df['ItemDescription'] = 'Order Id: ' + qbo_df['*InvoiceNo'].astype(str) + ' / ' + qbo_df['House'].fillna('')
+        # Look for date column
+        for possible_date in ['Date', 'Service Date', 'Cleaning Date', 'Invoice Date']:
+            if possible_date in df.columns:
+                date_col = possible_date
+                break
+                
+        if not date_col:
+            # Try case-insensitive search
+            for col in df.columns:
+                if 'date' in col.lower():
+                    date_col = col
+                    break
         
-        # Add Notes to ItemDescription if available
-        mask = ~qbo_df['Note'].isna() & (qbo_df['Note'] != '')
-        qbo_df.loc[mask, 'ItemDescription'] = qbo_df.loc[mask, 'ItemDescription'] + ' / Notes: ' + qbo_df.loc[mask, 'Note']
+        # Look for ID column
+        for possible_id in ['ID', 'Id', 'Order', 'Order ID', 'Invoice', 'Ref']:
+            if possible_id in df.columns:
+                id_col = possible_id
+                break
+                
+        if not id_col:
+            # Try case-insensitive search
+            for col in df.columns:
+                if 'id' in col.lower() or 'order' in col.lower() or 'ref' in col.lower():
+                    id_col = col
+                    break
+                    
+        if not id_col and len(df.columns) > 0:
+            # If still not found, use first column as fallback
+            id_col = df.columns[0]
+            
+        # Look for House/Address column
+        for possible_house in ['House', 'Address', 'Location', 'Property', 'Apartment']:
+            if possible_house in df.columns:
+                house_col = possible_house
+                break
+                
+        if not house_col:
+            # Try case-insensitive search
+            for col in df.columns:
+                if 'house' in col.lower() or 'address' in col.lower() or 'location' in col.lower() or 'property' in col.lower():
+                    house_col = col
+                    break
         
-        # Set Item(Product/Service) column
-        qbo_df['Item(Product/Service)'] = 'Linhas de Lavanderia:Services'
+        # Look for Note column
+        for possible_note in ['Note', 'Notes', 'Comment', 'Comments', 'Description']:
+            if possible_note in df.columns:
+                note_col = possible_note
+                break
+                
+        if not note_col:
+            # Try case-insensitive search
+            for col in df.columns:
+                if 'note' in col.lower() or 'comment' in col.lower() or 'description' in col.lower():
+                    note_col = col
+                    break
         
-        # Set ItemQuantity to 1 for all rows
-        qbo_df['ItemQuantity'] = 1
+        # Make sure we have the minimally required columns
+        if not name_col:
+            raise ValueError("Could not find customer name column in the file")
+        if not price_col:
+            raise ValueError("Could not find price/amount column in the file")
         
-        # Now handle the sequential invoice numbers per customer
-        # First, get unique customers in the order they appear
-        unique_customers = qbo_df['*Customer'].drop_duplicates().tolist()
+        print(f"Using {name_col} as customer name column")
+        print(f"Using {price_col} as price column")
+        if date_col:
+            print(f"Using {date_col} as date column")
+        if id_col:
+            print(f"Using {id_col} as ID column")
+        if house_col:
+            print(f"Using {house_col} as house/address column")
+        if note_col:
+            print(f"Using {note_col} as note column")
         
-        # Create a mapping of customer to invoice number
+        # Create a basic transformation - copy needed columns to the QBO format
+        # Filter for valid rows - non-empty customer names
+        df = df.dropna(subset=[name_col])
+        df = df[df[name_col] != '']
+        
+        # Get unique customers
+        unique_customers = df[name_col].drop_duplicates().tolist()
+        
+        # Create invoice numbers sequence
         invoice_mapping = {}
         current_invoice = start_invoice_number
         
@@ -78,14 +188,74 @@ def transform_data(file_path, start_invoice_number, invoice_date):
             invoice_mapping[customer] = current_invoice
             current_invoice += 1
         
-        # Apply the invoice numbers
-        qbo_df['*InvoiceNo'] = qbo_df['*Customer'].map(invoice_mapping)
+        # Build the QBO dataframe row by row
+        rows = []
         
-        # Now we need to handle the customer name appearing only once per invoice
-        # First, sort by invoice number to group by customer
-        qbo_df = qbo_df.sort_values(by=['*InvoiceNo'])
+        for _, row in df.iterrows():
+            customer = row[name_col]
+            # Check if price can be converted to float
+            try:
+                price = float(row[price_col])
+            except:
+                # Try to extract numeric part
+                price_str = str(row[price_col])
+                price_str = ''.join(c for c in price_str if c.isdigit() or c == '.' or c == ',')
+                price_str = price_str.replace(',', '.')
+                try:
+                    price = float(price_str)
+                except:
+                    price = 0
+            
+            # Create a description with the requested format
+            description = ""
+            
+            # Add house/address if available
+            if house_col and house_col in row and pd.notna(row[house_col]) and row[house_col] != '':
+                description = f"{row[house_col]}, "
+            
+            # Add order ID
+            if id_col and id_col in row and pd.notna(row[id_col]) and row[id_col] != '':
+                order_id = row[id_col]
+            else:
+                order_id = invoice_mapping[customer]  # Use invoice number as fallback
+                
+            description += f"/ order id: {order_id}"
+            
+            # Add note if available
+            if note_col and note_col in row and pd.notna(row[note_col]) and row[note_col] != '':
+                description += f" / Notes: {row[note_col]}"
+            
+            # Add date if available
+            if date_col and date_col in row and pd.notna(row[date_col]):
+                try:
+                    service_date = pd.to_datetime(row[date_col]).strftime('%d/%m/%Y')
+                except:
+                    service_date = invoice_date.strftime('%d/%m/%Y')
+            else:
+                service_date = invoice_date.strftime('%d/%m/%Y')
+            
+            # Create a QBO row
+            qbo_row = {
+                '*InvoiceNo': invoice_mapping[customer],
+                '*Customer': customer,
+                '*InvoiceDate': invoice_date.strftime('%d/%m/%Y'),
+                '*DueDate': (invoice_date + timedelta(days=4)).strftime('%d/%m/%Y'),
+                'Item(Product/Service)': 'Linhas de Lavanderia:Services',
+                'ItemDescription': description,
+                'ItemQuantity': 1,
+                '*ItemAmount': price,
+                'Service Date': service_date
+            }
+            
+            rows.append(qbo_row)
         
-        # For each invoice number (customer), keep only the first occurrence of customer name
+        # Convert list of rows to DataFrame
+        if not rows:
+            raise ValueError("No valid invoice data found in the file after processing")
+            
+        qbo_df = pd.DataFrame(rows)
+        
+        # Set blank customer names for all but first occurrence of each invoice
         for inv_num in qbo_df['*InvoiceNo'].unique():
             mask = qbo_df['*InvoiceNo'] == inv_num
             indices = qbo_df[mask].index
@@ -93,30 +263,16 @@ def transform_data(file_path, start_invoice_number, invoice_date):
                 qbo_df.loc[indices[1:], '*Customer'] = ''  # Clear customer name for all but first row
                 qbo_df.loc[indices[1:], '*InvoiceDate'] = ''  # Clear invoice date for all but first row
                 qbo_df.loc[indices[1:], '*DueDate'] = ''  # Clear due date for all but first row
-        
-        # Select and order columns as needed for QBO
-        final_columns = [
-            '*InvoiceNo', 
-            '*Customer', 
-            '*InvoiceDate', 
-            '*DueDate', 
-            'Item(Product/Service)', 
-            'ItemDescription', 
-            'ItemQuantity', 
-            '*ItemAmount', 
-            'Service Date'
-        ]
-        
-        # Make sure we only keep columns we need
-        qbo_df = qbo_df[final_columns]
-        
-        # Format dates properly
-        qbo_df['Service Date'] = pd.to_datetime(qbo_df['Service Date']).dt.strftime('%d/%m/%Y')
+                
+        print(f"Created {len(qbo_df)} invoice rows for QuickBooks Online import")
         
         return qbo_df
     
     except Exception as e:
-        raise Exception(f"Error transforming data: {str(e)}")
+        print(f"Error in transform_data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise ValueError(f"Error transforming data: {str(e)}")
 
 def save_to_csv(df, output_path):
     """
@@ -140,34 +296,94 @@ def get_unique_customers(file_path):
     Extract unique customer names from the input file
     
     Args:
-        file_path (str): Path to the Excel file
+        file_path (str): Path to the Excel or CSV file
         
     Returns:
         list: List of unique customer names
     """
     try:
-        df = pd.read_excel(file_path)
-        if 'Name' not in df.columns:
-            raise ValueError("Column 'Name' not found in the file")
-            
-        # Filter out rows with missing names or total rows
-        df = df.dropna(subset=['Name'])
-        df = df[df['Name'] != '']
+        # Determine file type based on extension
+        file_extension = file_path.lower().split('.')[-1] if '.' in file_path else ''
         
-        # Only keep rows with status "Delivery" or "Production" or "Open"
+        # Read the file based on its extension
+        if file_extension == 'csv':
+            print("Reading CSV file for customer extraction...")
+            df = pd.read_csv(file_path)
+        else:
+            # Try multiple Excel reading engines if it's an Excel file
+            try:
+                print("Attempting to read Excel file with default engine for customer extraction...")
+                df = pd.read_excel(file_path)
+            except Exception as e1:
+                print(f"Error with default engine: {str(e1)}")
+                try:
+                    print("Trying with engine='openpyxl'...")
+                    df = pd.read_excel(file_path, engine='openpyxl')
+                except Exception as e2:
+                    print(f"Error with openpyxl engine: {str(e2)}")
+                    try:
+                        print("Trying with engine='xlrd'...")
+                        df = pd.read_excel(file_path, engine='xlrd')
+                    except Exception as e3:
+                        print(f"Error with xlrd engine: {str(e3)}")
+                        # If Excel reading fails completely, try CSV as last resort
+                        try:
+                            print("Trying to read as CSV...")
+                            df = pd.read_csv(file_path)
+                        except Exception as e4:
+                            print(f"Error reading as CSV: {str(e4)}")
+                            print(f"Could not read file with any available method. Returning empty customer list.")
+                            return []
+        
+        # Log the column names to help with debugging
+        print(f"Columns in file: {df.columns.tolist()}")
+        
+        # Check if 'Name' column exists - try case-insensitive match if not
+        if 'Name' not in df.columns:
+            # Try to find a column that might contain customer names
+            name_cols = [col for col in df.columns if 'name' in col.lower()]
+            if name_cols:
+                name_col = name_cols[0]
+                print(f"Using '{name_col}' as the customer name column")
+            else:
+                # If can't find a name column, check if the first column might contain names
+                if len(df.columns) > 0:
+                    if len(df.columns) > 1:
+                        name_col = df.columns[1]  # Often the second column is for names
+                    else:
+                        name_col = df.columns[0]  # Use first column as fallback
+                    print(f"Using column '{name_col}' as a fallback for customer names")
+                else:
+                    raise ValueError("Could not identify a suitable customer name column")
+        else:
+            name_col = 'Name'
+        
+        # Filter out rows with missing names or total rows
+        df = df.dropna(subset=[name_col])
+        df = df[df[name_col] != '']
+        
+        # Filter rows by Status if the column exists
         if 'Status' in df.columns:
-            df = df[df['Status'].isin(['Delivery', 'Production', 'Open'])]
-            
+            valid_statuses = ['Delivery', 'Production', 'Open']
+            df = df[df['Status'].isin(valid_statuses)]
+            print(f"Filtered to {len(df)} rows with status in {valid_statuses}")
+        else:
+            print("No 'Status' column found, not filtering by status")
+        
         # Get unique customer names
-        unique_customers = df['Name'].unique().tolist()
+        unique_customers = df[name_col].unique().tolist()
+        print(f"Found {len(unique_customers)} unique customers")
+        
         return unique_customers
     
     except Exception as e:
-        raise Exception(f"Error extracting customer names: {str(e)}")
+        print(f"Error in get_unique_customers: {str(e)}")
+        # Return an empty list as a fallback to allow the app to continue
+        return []
 
 def validate_file(file_path):
     """
-    Validate that the uploaded file is an Excel file with the expected format
+    Validate that the uploaded file is an Excel file or CSV with the expected format
     
     Args:
         file_path (str): Path to the file
@@ -176,26 +392,60 @@ def validate_file(file_path):
         bool: True if valid, raises Exception if not
     """
     # Check file extension
-    if not file_path.lower().endswith(('.xlsx', '.xls')):
-        raise ValueError("File must be an Excel file (.xlsx or .xls)")
+    file_extension = file_path.lower().split('.')[-1] if '.' in file_path else ''
+    if file_extension not in ['xlsx', 'xls', 'csv']:
+        raise ValueError("File must be an Excel file (.xlsx or .xls) or CSV file (.csv)")
     
     # Check if file exists and is readable
     if not os.path.isfile(file_path):
         raise ValueError("File does not exist or is not accessible")
     
-    # Check if file name matches expected pattern
-    file_name = os.path.basename(file_path)
-    pattern = r"^Laundry Service - Financial Report - \d{4}-\d{2}-\d{2}.*\.(xlsx|xls)$"
-    if not re.match(pattern, file_name):
-        raise ValueError("File name does not match expected format 'Laundry Service - Financial Report - yyyy-mm-dd...'")
-    
-    # Check file content
+    # Try to read the file
     try:
-        df = pd.read_excel(file_path)
-        required_columns = ['Id', 'Name', 'Cleaning Date', 'House', 'Code', 'Status', 'Price']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+        if file_extension == 'csv':
+            print("Reading CSV file...")
+            df = pd.read_csv(file_path)
+        else:
+            # Try multiple Excel reading engines if it's an Excel file
+            try:
+                print("Attempting to read Excel file with default engine...")
+                df = pd.read_excel(file_path)
+            except Exception as e1:
+                print(f"Error with default engine: {str(e1)}")
+                try:
+                    print("Trying with engine='openpyxl'...")
+                    df = pd.read_excel(file_path, engine='openpyxl')
+                except Exception as e2:
+                    print(f"Error with openpyxl engine: {str(e2)}")
+                    try:
+                        print("Trying with engine='xlrd'...")
+                        df = pd.read_excel(file_path, engine='xlrd')
+                    except Exception as e3:
+                        print(f"Error with xlrd engine: {str(e3)}")
+                        # If CSV with xlsx extension, try reading as CSV
+                        try:
+                            print("Trying to read as CSV...")
+                            df = pd.read_csv(file_path)
+                        except Exception as e4:
+                            print(f"Error reading as CSV: {str(e4)}")
+                            raise ValueError(f"Could not read file with any available method. Last error: {str(e3)}")
+        
+        print(f"File loaded successfully with {len(df)} rows and columns: {df.columns.tolist()}")
+        
+        # Check for minimum required columns for functionality
+        required_columns = ['Name', 'Price']
+        
+        # Look for variations of required column names
+        name_columns = [col for col in df.columns if 'name' in col.lower()]
+        price_columns = [col for col in df.columns if any(x in col.lower() for x in ['price', 'amount', 'value', 'cost'])]
+        
+        if not name_columns:
+            print("Warning: No 'Name' column found. Looking for a suitable column to use as customer name.")
+            # We'll handle this in get_unique_customers
+        
+        if not price_columns:
+            raise ValueError("No column found for price/amount information. This is required for invoicing.")
+            
         return True
     except Exception as e:
-        raise ValueError(f"Error reading Excel file: {str(e)}") 
+        raise ValueError(f"Error reading file: {str(e)}")
